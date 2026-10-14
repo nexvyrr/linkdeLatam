@@ -5,10 +5,46 @@ local PathfindingService = game:GetService("PathfindingService")
 local CoreGui = game:GetService("CoreGui")
 local RS = game:GetService("ReplicatedStorage")
 local Debris = game:GetService("Debris")
+local TweenService = game:GetService("TweenService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 local lp = Players.LocalPlayer
 local genv = getgenv()
 
 if genv.__UWU_STOP then pcall(genv.__UWU_STOP) end
+
+local function cleanAC()
+    pcall(function()
+        local rf = game:GetService("ReplicatedFirst")
+        for _, c in ipairs(rf:GetChildren()) do
+            local n = c.Name:lower()
+            if n:find("anticheat") or n:find("canary") or n:find("_ac") then
+                c:Destroy()
+            end
+        end
+        local canary = rf:FindFirstChild("_anticheatCanary")
+        if canary then canary:Destroy() end
+    end)
+    pcall(function()
+        local pg = game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui")
+        if pg then
+            for _, c in ipairs(pg:GetDescendants()) do
+                if c:IsA("LocalScript") then
+                    local n = c.Name:lower()
+                    if n:find("anticheat") or n:find("canary") then
+                        c:Destroy()
+                    end
+                end
+            end
+        end
+    end)
+end
+cleanAC()
+task.spawn(function()
+    while true do
+        task.wait(8)
+        cleanAC()
+    end
+end)
 
 local _version = "1.6.66"
 local uiFileName = "WindUI_Cache_v" .. _version .. ".txt"
@@ -56,16 +92,34 @@ end
 
 local FARM = {
     on = false,
+    safe = true,
     keys = { "coin", "pumpkin", "candy", "orb", "cash", "calabaza", "collect", "drop", "event" },
     skip = { "tele", "portal", "exit", "leave", "lobby", "kill", "lava", "damage", "void", "trap" },
-    range = 60,
-    interval = 0.1,
-    retry = 6,
-    hold = 0.05,
-    delay = 4,
+    range = 42,
+    interval = 0.32,
+    retry = 11,
+    hold = 0.07,
+    delay = 5.5,
     since = nil,
     ready = nil,
 }
+
+local function applyFarmMode()
+    if FARM.safe then
+        FARM.range = 42
+        FARM.interval = 0.32
+        FARM.retry = 11
+        FARM.hold = 0.07
+        FARM.delay = 5.5
+    else
+        FARM.range = 60
+        FARM.interval = 0.12
+        FARM.retry = 6
+        FARM.hold = 0.05
+        FARM.delay = 4
+    end
+end
+applyFarmMode()
 local cache, lastTouch = {}, {}
 
 local function inCharacter(p)
@@ -402,7 +456,6 @@ C(RunService.RenderStepped, function(dt)
     end
 end)
 
--- ===== SILENT BEGIN =====
 local SILENT = {
     on = false,
     autoshoot = false,
@@ -626,8 +679,6 @@ local function installHooks()
         return oldIndex(self, key)
     end))
 end
--- ===== SILENT END =====
--- ===== HITMARKER + KILL NOTIFY BEGIN =====
 local HM = {
     on = true,
     gui = nil,
@@ -1039,7 +1090,6 @@ end)
 
 buildHitMarker()
 buildKillNotify()
--- ===== HITMARKER + KILL NOTIFY END =====
 
 
 local KILLFX = {
@@ -1573,7 +1623,6 @@ local function SetInfJump(state)
     end)
 end
 
--- ===== KILL BEGIN =====
 
 local ROUND = { labels = {}, scanAt = 0, checkAt = 0, ok = false }
 
@@ -1650,35 +1699,8 @@ local function roundActive(hum, root)
         and hum.WalkSpeed > 0.5
     return ROUND.ok
 end
-FARM.ready = roundActive
 
-local KILL = {
-    on = false,
-    active = false,
-    target = nil,
-    lastSafe = nil,
-    knife = nil,
-    equipAcc = 0,
-    stabAcc = 0,
-    touchAcc = 0,
-    speed = 220,
-    near = 1.5,
-    lieY = 2,
-    killAcc = 0,
-    killEv = {},
-    cc = {},
-    parts = {},
-    partsAt = 0,
-    partsCh = nil,
-    lastCF = nil,
-    psSet = false,
-    psWas = false,
-    btnAt = 0,
-    stabBtn = nil,
-    toolRem = {},
-    hb = {},
-    hbSize = 10,
-}
+FARM.ready = roundActive
 
 local KNIFE_WORDS = { "knife", "cuchillo", "blade", "dagger", "daga", "machete", "katana", "sword", "espada", "kunai", "melee" }
 local GUN_WORDS = { "gun", "pistol", "rifle", "revolver", "pistola", "shotgun", "sniper", "smg", "uzi", "glock", "launcher", "bow" }
@@ -1700,349 +1722,142 @@ local function toolIsKnife(t)
     return false
 end
 
-local function findKnife(ch)
-    local pools = { ch, lp:FindFirstChild("Backpack") }
-    local fallback
-    for _, pool in ipairs(pools) do
-        if pool then
-            for _, t in ipairs(pool:GetChildren()) do
-                if t:IsA("Tool") then
-                    if toolIsKnife(t) then return t end
-                    if not fallback and not nameHas(t.Name, GUN_WORDS) then fallback = t end
-                end
-            end
-        end
+local KILLALL = {
+    running = false,
+    tweenTime = 1.8,
+    clicks = 12,
+    clickDelay = 0.09,
+}
+
+local function aimGetPart(ch)
+    if SILENT.part == "Head" then
+        return ch:FindFirstChild("Head")
+    elseif SILENT.part == "Torso" then
+        return ch:FindFirstChild("UpperTorso")
+            or ch:FindFirstChild("Torso")
+            or ch:FindFirstChild("HumanoidRootPart")
     end
-    return fallback
+    return ch:FindFirstChild("Head")
+        or ch:FindFirstChild("UpperTorso")
+        or ch:FindFirstChild("Torso")
+        or ch:FindFirstChild("HumanoidRootPart")
 end
 
-local function ensureKnife(hum, ch)
-    local k = KILL.knife
-    local bp = lp:FindFirstChild("Backpack")
-    if not (k and k.Parent and (k.Parent == ch or k.Parent == bp)) then
-        k = findKnife(ch)
-        KILL.knife = k
-    end
-    if not k then return nil end
-    if k.Parent ~= ch then
-        pcall(function() hum:EquipTool(k) end)
-    end
-    if k.Parent == ch then return k end
-    return nil
-end
-
-local function killNoclip(ch, now)
-    if KILL.partsCh ~= ch or now - KILL.partsAt > 0.3 then
-        KILL.partsCh, KILL.partsAt = ch, now
-        local list = {}
-        for _, d in ipairs(ch:GetDescendants()) do
-            if d:IsA("BasePart") then list[#list + 1] = d end
-        end
-        KILL.parts = list
-    end
-    for _, p in ipairs(KILL.parts) do
-        if p.Parent then
-            if KILL.cc[p] == nil then KILL.cc[p] = p.CanCollide end
-            if p.CanCollide then p.CanCollide = false end
-        end
-    end
-end
-
-local function killRestoreCollide()
-    for p, v in pairs(KILL.cc) do
-        if p.Parent then pcall(function() p.CanCollide = v end) end
-    end
-    KILL.cc = {}
-    KILL.parts = {}
-    KILL.partsCh = nil
-end
-
-local function hbApply(hrp)
-    local o = KILL.hb[hrp]
-    if not o then
-        o = {
-            Size = hrp.Size, Transparency = hrp.Transparency,
-            CanCollide = hrp.CanCollide, Massless = hrp.Massless,
-        }
-        KILL.hb[hrp] = o
-    end
-    local want = Vector3.new(KILL.hbSize, KILL.hbSize, KILL.hbSize)
-    if hrp.Size ~= want then hrp.Size = want end
-    hrp.Transparency = 0.8
-    hrp.CanCollide = false
-    hrp.Massless = true
-    hrp.CanQuery = true
-    hrp.CanTouch = true
-end
-
-local function hbRestore(hrp)
-    local o = KILL.hb[hrp]
-    KILL.hb[hrp] = nil
-    if not o then return end
+local function clickMouse()
     pcall(function()
-        hrp.Size = o.Size
-        hrp.Transparency = o.Transparency
-        hrp.CanCollide = o.CanCollide
-        hrp.Massless = o.Massless
+        if mouse1press and mouse1release then
+            mouse1press()
+            task.wait(0.02)
+            mouse1release()
+        elseif mouse1click then
+            mouse1click()
+        else
+            local cam = workspace.CurrentCamera
+            local vp = cam and cam.ViewportSize or Vector2.new(800, 600)
+            local x, y = vp.X / 2, vp.Y / 2
+            VirtualInputManager:SendMouseButtonEvent(x, y, 0, true, game, 1)
+            task.wait(0.025)
+            VirtualInputManager:SendMouseButtonEvent(x, y, 0, false, game, 1)
+        end
     end)
 end
 
-local function hbRestoreAll(except)
-    for hrp in pairs(KILL.hb) do
-        if hrp ~= except then hbRestore(hrp) end
-    end
-end
-
-local function killRelease()
-    if not KILL.active then return end
-    KILL.active = false
-    KILL.lastCF = nil
-    hbRestoreAll()
-    local ch = lp.Character
-    local root = ch and ch:FindFirstChild("HumanoidRootPart")
-    local hum = ch and ch:FindFirstChildOfClass("Humanoid")
-    if root then
-        if KILL.lastSafe then root.CFrame = CFrame.new(KILL.lastSafe) end
-        root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-        root.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-    end
-    if hum and KILL.psSet then pcall(function() hum.PlatformStand = KILL.psWas end) end
-    KILL.psSet = false
-    killRestoreCollide()
-end
-
-local function enemyFeetY(ehum, ehrp)
-    local sizeY = ehrp.Size.Y
-    local o = KILL.hb[ehrp]
-    if o then sizeY = o.Size.Y end
-    if ehum.RigType == Enum.HumanoidRigType.R6 then
-        return ehrp.Position.Y - (2 + sizeY / 2)
-    end
-    return ehrp.Position.Y - (ehum.HipHeight + sizeY / 2)
-end
-
-local function killTargetParts(plr)
-    local ch = plr and plr.Character
-    local hum = ch and ch:FindFirstChildOfClass("Humanoid")
-    local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
-    if hum and hrp and hum.Health > 0 then return ch, hum, hrp end
-    return nil
-end
-
-local function killPick(root)
-    local best, bestD
-    for _, plr in ipairs(getEnemies()) do
-        local ch, _, hrp = killTargetParts(plr)
-        if ch then
-            local d = (hrp.Position - root.Position).Magnitude
-            if not bestD or d < bestD then best, bestD = plr, d end
+local equipping = false
+local function equipTool1()
+    local char = lp.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if not hum then return false end
+    if char:FindFirstChildOfClass("Tool") then return true end
+    if equipping then return false end
+    local bag = lp:FindFirstChild("Backpack")
+    if not bag then return false end
+    local tool = nil
+    for _, t in ipairs(bag:GetChildren()) do
+        if t:IsA("Tool") then
+            tool = t
+            break
         end
     end
-    return best
+    if not tool then return false end
+    equipping = true
+    pcall(function() hum:EquipTool(tool) end)
+    task.delay(0.2, function() equipping = false end)
+    return true
 end
 
-C(RunService.Stepped, function(_, dt)
-    if not KILL.on then
-        if KILL.active then killRelease() end
-        return
-    end
-    local ch = lp.Character
-    local hum = ch and ch:FindFirstChildOfClass("Humanoid")
-    local root = ch and ch:FindFirstChild("HumanoidRootPart")
-    if not hum or not root or hum.Health <= 0 or not roundActive(hum, root) then
-        KILL.target = nil
-        if KILL.active then killRelease() end
-        return
-    end
-
-    local ech, ehum, ehrp = killTargetParts(KILL.target)
-    if not ech then
-        KILL.target = killPick(root)
-        ech, ehum, ehrp = killTargetParts(KILL.target)
-    end
-    if not ech then
-        KILL.target = nil
-        if KILL.active then killRelease() end
-        return
-    end
-
-    KILL.active = true
-    hbRestoreAll(ehrp)
-    hbApply(ehrp)
-    local nowc = os.clock()
-    killNoclip(ch, nowc)
-    if not KILL.psSet then
-        KILL.psSet = true
-        KILL.psWas = hum.PlatformStand
-    end
-    hum.PlatformStand = true
-
-    local ep = ehrp.Position
-    local feetY = enemyFeetY(ehum, ehrp)
-    KILL.lastSafe = ep + Vector3.new(0, 3, 0)
-    local pos = root.Position
-    local ox, oz = pos.X - ep.X, pos.Z - ep.Z
-    local om = math.sqrt(ox * ox + oz * oz)
-    if om < 0.05 then
-        local lv = ehrp.CFrame.LookVector
-        ox, oz = -lv.X, -lv.Z
-        om = math.sqrt(ox * ox + oz * oz)
-        if om < 0.0001 then ox, oz, om = 0, 1, 1 end
-    end
-    ox, oz = ox / om, oz / om
-    local y = math.max(feetY + KILL.lieY, ep.Y - 3.5)
-    local goal = Vector3.new(ep.X + ox * KILL.near, y, ep.Z + oz * KILL.near)
-    local delta = goal - pos
-    local dist = delta.Magnitude
-    local newPos = goal
-    if dist > 0.05 then
-        local step = math.min(dist, math.max(KILL.speed * dt, dist * (1 - math.exp(-20 * dt))))
-        newPos = pos + delta.Unit * step
-    end
-    KILL.lastCF = CFrame.lookAt(newPos, newPos + Vector3.new(-ox, 0, -oz)) * CFrame.Angles(0, 0, math.rad(90))
-    root.CFrame = KILL.lastCF
-    root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-    root.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-end)
-
-local STAB_WORDS = { "stab", "attack", "slash", "swing", "atacar", "apuñal" }
-
-local function buttonText(b)
-    local t = b:IsA("TextButton") and b.Text or ""
-    if t == "" then
-        for _, c in ipairs(b:GetDescendants()) do
-            if (c:IsA("TextLabel") or c:IsA("TextButton")) and c.Text ~= "" then t = c.Text break end
-        end
-    end
-    return t
+local function slowTweenTo(hrp, goalCF, duration)
+    local info = TweenInfo.new(
+        duration or KILLALL.tweenTime,
+        Enum.EasingStyle.Linear,
+        Enum.EasingDirection.InOut
+    )
+    local tw = TweenService:Create(hrp, info, { CFrame = goalCF })
+    tw:Play()
+    tw.Completed:Wait()
 end
 
-local function findStabButton(now)
-    local b = KILL.stabBtn
-    if b and b.Parent then return b end
-    if now - KILL.btnAt < 1.5 then return nil end
-    KILL.btnAt = now
-    local pg = lp:FindFirstChild("PlayerGui")
-    if not pg then return nil end
-    for _, d in ipairs(pg:GetDescendants()) do
-        if d:IsA("GuiButton") and (nameHas(d.Name, STAB_WORDS) or nameHas(buttonText(d), STAB_WORDS)) then
-            KILL.stabBtn = d
-            return d
-        end
-    end
-    return nil
-end
+local function doKillAll()
+    if KILLALL.running then return end
+    if not enPartida() then return end
+    KILLALL.running = true
 
-local STAB_SIGNALS = { "MouseButton1Down", "MouseButton1Click", "MouseButton1Up", "Activated" }
-local function pressButton(b)
-    for _, s in ipairs(STAB_SIGNALS) do
-        pcall(function()
-            local sig = b[s]
-            local fired = false
-            if getconnections then
-                for _, c in ipairs(getconnections(sig)) do
-                    pcall(function() c:Fire() end)
-                    fired = true
+    task.spawn(function()
+        pcall(installHooks)
+        local wasSilent = SILENT.on
+        SILENT.on = true
+
+        local enemies = getEnemies()
+        for _, plr in ipairs(enemies) do
+            if not KILLALL.running then break end
+            if not enPartida() then break end
+
+            local eChar = plr.Character
+            local eHRP = eChar and eChar:FindFirstChild("HumanoidRootPart")
+            local eHum = eChar and eChar:FindFirstChildOfClass("Humanoid")
+            local myChar = lp.Character
+            local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+            local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+
+            if eHRP and eHum and eHum.Health > 0 and myHRP and myHum and myHum.Health > 0 then
+                SILENT.target = aimGetPart(eChar) or eHRP
+
+                local under = eHRP.CFrame * CFrame.new(0, -2.2, 0.5)
+                pcall(function()
+                    slowTweenTo(myHRP, under, KILLALL.tweenTime)
+                end)
+
+                if not KILLALL.running then break end
+
+                equipTool1()
+                task.wait(0.12)
+
+                for i = 1, KILLALL.clicks do
+                    if not KILLALL.running then break end
+                    local still = plr.Character and plr.Character:FindFirstChildOfClass("Humanoid")
+                    if not still or still.Health <= 0 then break end
+
+                    local eh = plr.Character:FindFirstChild("HumanoidRootPart")
+                    if eh and myHRP then
+                        pcall(function()
+                            myHRP.CFrame = eh.CFrame * CFrame.new(0, -2.0, 0.4)
+                        end)
+                    end
+
+                    SILENT.target = aimGetPart(plr.Character) or eh
+                    equipTool1()
+                    clickMouse()
+                    task.wait(KILLALL.clickDelay)
                 end
+
+                task.wait(0.25)
             end
-            if not fired and firesignal then firesignal(sig) end
-        end)
-    end
-end
-
-local function knifeRemotes(tool)
-    local list = KILL.toolRem[tool]
-    if list then return list end
-    list = {}
-    for _, d in ipairs(tool:GetDescendants()) do
-        if d:IsA("RemoteEvent") and nameHas(d.Name, STAB_WORDS) then list[#list + 1] = d end
-    end
-    KILL.toolRem[tool] = list
-    return list
-end
-
-local function knifeKillEvent(tool)
-    local e = KILL.killEv[tool]
-    if e and e.Parent then return e end
-    local handle = tool:FindFirstChild("Handle")
-    e = tool:FindFirstChild("Kill") or (handle and handle:FindFirstChild("Kill"))
-        or tool:FindFirstChild("ThrowKill") or (handle and handle:FindFirstChild("ThrowKill"))
-    if e and not e:IsA("RemoteEvent") then e = nil end
-    KILL.killEv[tool] = e
-    return e
-end
-
-C(RunService.Heartbeat, function(dt)
-    if not (KILL.on and KILL.active and KILL.target) then return end
-    local ch = lp.Character
-    local hum = ch and ch:FindFirstChildOfClass("Humanoid")
-    local root = ch and ch:FindFirstChild("HumanoidRootPart")
-    if not hum or not root then return end
-
-    if KILL.lastCF then
-        root.CFrame = KILL.lastCF
-        root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-        root.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-    end
-
-    KILL.equipAcc = KILL.equipAcc + dt
-    if KILL.equipAcc >= 0.2 or not (KILL.knife and KILL.knife.Parent == ch) then
-        KILL.equipAcc = 0
-        ensureKnife(hum, ch)
-    end
-    local tool = KILL.knife
-    if not (tool and tool.Parent == ch) then return end
-
-    KILL.stabAcc = KILL.stabAcc + dt
-    if KILL.stabAcc >= 0.04 then
-        KILL.stabAcc = 0
-        pcall(function() tool:Activate() end)
-        local btn = findStabButton(os.clock())
-        if btn then pressButton(btn) end
-        for _, r in ipairs(knifeRemotes(tool)) do
-            pcall(function() r:FireServer() end)
         end
-    end
 
-    KILL.killAcc = KILL.killAcc + dt
-    if KILL.killAcc >= 0.05 then
-        KILL.killAcc = 0
-        local _, ehum, ehrp = killTargetParts(KILL.target)
-        local ev = ehum and knifeKillEvent(tool)
-        if ev and (root.Position - ehrp.Position).Magnitude <= 6 then
-            pcall(function() ev:FireServer(ehum) end)
-        end
-    end
-
-    KILL.touchAcc = KILL.touchAcc + dt
-    if KILL.touchAcc >= 0.1 and firetouchinterest then
-        KILL.touchAcc = 0
-        local handle = tool:FindFirstChild("Handle")
-        local ech, _, ehrp = killTargetParts(KILL.target)
-        if handle and ech then
-            local head = ech:FindFirstChild("Head")
-            pcall(function()
-                firetouchinterest(handle, ehrp, 0)
-                firetouchinterest(handle, ehrp, 1)
-                if head then
-                    firetouchinterest(handle, head, 0)
-                    firetouchinterest(handle, head, 1)
-                end
-            end)
-        end
-    end
-end)
-
-local function killAllSet(v)
-    KILL.on = v and true or false
-    if KILL.on then
-        KILL.target = nil
-        KILL.equipAcc = 0
-    else
-        KILL.target = nil
-        killRelease()
-    end
+        if not wasSilent then SILENT.on = false end
+        KILLALL.running = false
+    end)
 end
+
 
 local SHOOT = { acc = 0 }
 
@@ -2070,7 +1885,7 @@ C(RunService.Heartbeat, function(dt)
     SHOOT.acc = 0
 
     local tgt = SILENT.target
-    if KILL.active or not tgt or not tgt.Parent then return end
+    if KILLALL.running or not tgt or not tgt.Parent then return end
     local ch = lp.Character
     local hum = ch and ch:FindFirstChildOfClass("Humanoid")
     if not hum or hum.Health <= 0 or not enPartida() then return end
@@ -2837,7 +2652,6 @@ end)
 C(lp.CharacterAdded, function()
     autoReset()
 end)
--- ===== AUTO END =====
 
 
 
@@ -3103,8 +2917,8 @@ end
 local Window = WindUI:CreateWindow({
     Title = "Open HUB",
     Theme = "Crimson",
-    Author = "By 7.dui, jos1k, void, fabnx1",
-    Folder = "NEXVYRHUB | LATAM [1.0]",
+    Author = "Latam duels",
+    Folder = "NEXVYRHUB | LATAM [1.2]",
     Acrylic = false,
     Transparent = false,
     NewElements = true,
@@ -3124,34 +2938,22 @@ local Window = WindUI:CreateWindow({
     }
 })
 
-WindUI:SetTheme("Crimson")
+WindUI:SetTheme("Midnight")
 
 local TabFarm = Window:Tab({ Title = "Farm", Icon = "coins" })
 local TabAuto = Window:Tab({ Title = "Auto", Icon = "bot" })
 local TabKill = Window:Tab({ Title = "Kill", Icon = "swords" })
 local TabAim = Window:Tab({ Title = "Aim", Icon = "crosshair" })
 local TabEsp = Window:Tab({ Title = "ESP", Icon = "eye" })
-local TabTramposo = Window:Tab({ Title = "Misc", Icon = "settings" })
+local TabMisc = Window:Tab({ Title = "Misc", Icon = "settings" })
 local TabFps = Window:Tab({ Title = "FPS", Icon = "gauge" })
-local TabSonidos = Window:Tab({ Title = "Sounds", Icon = "volume-2" })
+local TabSounds = Window:Tab({ Title = "Sounds", Icon = "volume-2" })
+local TabCredits = Window:Tab({ Title = "Credits", Icon = "users" })
 
-TabFps:Toggle({
-    Title = "FPS boost",
-    Value = false,
-    Callback = function(v)
-        fpsSet(v)
-    end,
-})
-
-TabFps:Paragraph({
-    Title = "About",
-    Desc = "Cuts particles, effects, shadows and graphics. Client only.",
-})
-
-
-
+TabFarm:Section({ Title = "Farm" })
 TabFarm:Toggle({
-    Title = "Coin farm",
+    Title = "Coin Farm",
+    Desc = "Auto collect nearby coins and drops",
     Value = false,
     Callback = function(v)
         FARM.on = v
@@ -3161,96 +2963,18 @@ TabFarm:Toggle({
         end
     end,
 })
-
-TabEsp:Toggle({
-    Title = "Highlight",
-    Value = false,
-    Callback = function(v) ESP.hl = v end,
-})
-
-TabEsp:Toggle({
-    Title = "Boxes",
-    Value = false,
-    Callback = function(v) ESP.box = v end,
-})
-
-TabEsp:Toggle({
-    Title = "Pulse",
+TabFarm:Toggle({
+    Title = "Safe Farm",
+    Desc = "Slower safer collection (recommended)",
     Value = true,
-    Callback = function(v) ESP.pulse = v end,
-})
-
-TabEsp:Colorpicker({
-    Title = "Color",
-    Default = ESP.color,
-    Callback = function(c) ESP.color = c end,
-})
-
-TabAim:Toggle({
-    Title = "Autoshoot",
-    Value = false,
     Callback = function(v)
-        SILENT.autoshoot = v
-        if v then
-            local s, e = pcall(installHooks)
-        elseif not SILENT.on then
-            SILENT.target = nil
-        end
+        FARM.safe = v
+        applyFarmMode()
+        table.clear(lastTouch)
     end,
 })
 
-TabAim:Toggle({
-    Title = "Silent aim",
-    Value = false,
-    Callback = function(v)
-        SILENT.on = v
-        if v then
-            local s, e = pcall(installHooks)
-        else
-            SILENT.target = nil
-        end
-    end,
-})
-
-TabAim:Dropdown({
-    Title = "Hit part",
-    Values = { "Head", "Torso", "Full Body" },
-    Value = "Head",
-    Callback = function(v) SILENT.part = v end,
-})
-
-TabTramposo:Toggle({
-    Title = "Speed",
-    Value = false,
-    Callback = function(state)
-        SetSpeed(state)
-        notify("Speed", state)
-    end,
-})
-
-TabTramposo:Slider({
-    Title = "Speed value",
-    Step = 1,
-    Value = { Min = 1, Max = 100, Default = 29 },
-    Callback = function(v) SPEED = v end,
-})
-
-TabTramposo:Toggle({
-    Title = "Inf jump",
-    Value = false,
-    Callback = function(state)
-        SetInfJump(state)
-        notify("Jump", state)
-    end,
-})
-
-TabTramposo:Slider({
-    Title = "Jump power",
-    Step = 1,
-    Value = { Min = 1, Max = 100, Default = 45 },
-    Callback = function(v) JUMP_POWER = v end,
-})
-
+TabAuto:Section({ Title = "Queue" })
 TabAuto:Dropdown({
     Title = "Mode",
     Values = { "1vs1", "2vs2", "3vs3", "4vs4", "5vs5" },
@@ -3260,7 +2984,6 @@ TabAuto:Dropdown({
         autoReset()
     end,
 })
-
 TabAuto:Dropdown({
     Title = "Side",
     Values = { "Left", "Right" },
@@ -3270,9 +2993,8 @@ TabAuto:Dropdown({
         autoReset()
     end,
 })
-
 TabAuto:Toggle({
-    Title = "Flip slots",
+    Title = "Flip Slots",
     Value = false,
     Callback = function(v)
         AUTO.flip = v
@@ -3325,20 +3047,101 @@ togPos2 = TabAuto:Toggle({
     end,
 })
 
-TabKill:Toggle({
-    Title = "Kill all",
-    Value = false,
-    Callback = function(v) killAllSet(v) end,
+TabKill:Section({ Title = "Kill All" })
+TabKill:Button({
+    Title = "Start Kill All",
+    Callback = function()
+        doKillAll()
+    end,
+})
+TabKill:Button({
+    Title = "Stop Kill All",
+    Callback = function()
+        KILLALL.running = false
+    end,
+})
+TabKill:Slider({
+    Title = "Tween Duration (sec)",
+    Step = 0.1,
+    Value = { Min = 0.8, Max = 4, Default = 1.8 },
+    Callback = function(v) KILLALL.tweenTime = v end,
+})
+TabKill:Slider({
+    Title = "Clicks Per Enemy",
+    Step = 1,
+    Value = { Min = 4, Max = 30, Default = 12 },
+    Callback = function(v) KILLALL.clicks = v end,
+})
+TabKill:Slider({
+    Title = "Delay Between Clicks",
+    Step = 0.01,
+    Value = { Min = 0.04, Max = 0.25, Default = 0.09 },
+    Callback = function(v) KILLALL.clickDelay = v end,
 })
 
+TabAim:Section({ Title = "Silent Aim" })
+TabAim:Toggle({
+    Title = "Silent Aim",
+    Desc = "Redirect shots to the target",
+    Value = false,
+    Callback = function(v)
+        SILENT.on = v
+        if v then
+            local s, e = pcall(installHooks)
+        else
+            SILENT.target = nil
+        end
+    end,
+})
+TabAim:Toggle({
+    Title = "Autoshoot",
+    Desc = "Auto fire when a target is locked",
+    Value = false,
+    Callback = function(v)
+        SILENT.autoshoot = v
+        if v then
+            local s, e = pcall(installHooks)
+        elseif not SILENT.on then
+            SILENT.target = nil
+        end
+    end,
+})
+TabAim:Dropdown({
+    Title = "Hit Part",
+    Values = { "Head", "Torso", "Full Body" },
+    Value = "Head",
+    Callback = function(v) SILENT.part = v end,
+})
+
+TabEsp:Section({ Title = "Visuals" })
+TabEsp:Toggle({
+    Title = "Highlight",
+    Value = false,
+    Callback = function(v) ESP.hl = v end,
+})
+TabEsp:Toggle({
+    Title = "Boxes",
+    Value = false,
+    Callback = function(v) ESP.box = v end,
+})
+TabEsp:Toggle({
+    Title = "Pulse",
+    Value = true,
+    Callback = function(v) ESP.pulse = v end,
+})
+TabEsp:Colorpicker({
+    Title = "Color",
+    Default = ESP.color,
+    Callback = function(c) ESP.color = c end,
+})
+TabEsp:Section({ Title = "Combat UI" })
 TabEsp:Toggle({
     Title = "Hitmarker",
     Value = true,
     Callback = function(v) HM.on = v end,
 })
-
 TabEsp:Toggle({
-    Title = "Kill feed",
+    Title = "Kill Feed",
     Value = true,
     Callback = function(v)
         KN.on = v
@@ -3346,11 +3149,79 @@ TabEsp:Toggle({
     end,
 })
 
-TabSonidos:Dropdown({
+TabMisc:Section({ Title = "Movement" })
+TabMisc:Toggle({
+    Title = "Speed",
+    Value = false,
+    Callback = function(state)
+        SetSpeed(state)
+        notify("Speed", state)
+    end,
+})
+TabMisc:Slider({
+    Title = "Speed Value",
+    Step = 1,
+    Value = { Min = 1, Max = 100, Default = 29 },
+    Callback = function(v) SPEED = v end,
+})
+TabMisc:Toggle({
+    Title = "Infinite Jump",
+    Value = false,
+    Callback = function(state)
+        SetInfJump(state)
+        notify("Jump", state)
+    end,
+})
+TabMisc:Slider({
+    Title = "Jump Power",
+    Step = 1,
+    Value = { Min = 1, Max = 100, Default = 45 },
+    Callback = function(v) JUMP_POWER = v end,
+})
+
+TabFps:Section({ Title = "Performance" })
+TabFps:Toggle({
+    Title = "FPS Boost",
+    Desc = "Reduces particles, effects, shadows and graphics (client only)",
+    Value = false,
+    Callback = function(v)
+        fpsSet(v)
+    end,
+})
+
+TabSounds:Section({ Title = "Kill Effects" })
+TabSounds:Dropdown({
     Title = "Effect",
     Values = #names > 0 and names or { "None" },
     Value = names[1] or "None",
     Callback = function(v) selectedEffect = v end,
+})
+
+TabCredits:Section({ Title = "About" })
+TabCredits:Paragraph({
+    Title = "Latam Duels",
+    Desc = "Hub for LATAM Duels",
+})
+TabCredits:Paragraph({
+    Title = "Developers",
+    Desc = "7.dui  ·  jos1k  ·  void  ·  fabnx1",
+})
+TabCredits:Section({ Title = "Community" })
+TabCredits:Paragraph({
+    Title = "Discord",
+    Desc = "https://discord.gg/BYTqQH2ZQ",
+})
+TabCredits:Button({
+    Title = "Copy Discord",
+    Callback = function()
+        pcall(function()
+            if setclipboard then
+                setclipboard("https://discord.gg/BYTqQH2ZQ")
+            elseif toclipboard then
+                toclipboard("https://discord.gg/BYTqQH2ZQ")
+            end
+        end)
+    end,
 })
 
 genv.__UWU_STOP = function()
@@ -3363,8 +3234,7 @@ genv.__UWU_STOP = function()
     KILLFX.on = false
     KILLFX.debug = false
     AUTO.pos = nil
-    KILL.on = false
-    pcall(killRelease)
+    KILLALL.running = false
     SILENT.autoshoot = false
     pcall(SetSpeed, false)
     pcall(SetInfJump, false)
