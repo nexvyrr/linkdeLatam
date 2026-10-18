@@ -46,37 +46,7 @@ task.spawn(function()
     end
 end)
 
-local _version = "1.6.66"
-local uiFileName = "WindUI_Cache_v" .. _version .. ".txt"
-local timeFileName = "WindUI_Cache_v" .. _version .. "_Time.txt"
-
-local ok, WindUI = pcall(function()
-    local cacheValido = false
-
-    if isfile and isfile(timeFileName) and readfile then
-        local savedTime = tonumber(readfile(timeFileName))
-        if savedTime and (os.time() - savedTime) < 86400 then
-            cacheValido = true
-        end
-    end
-
-    if cacheValido and isfile and isfile(uiFileName) then
-        return loadstring(readfile(uiFileName))()
-    else
-        local codigoUi = game:HttpGet("https://github.com/Footagesus/WindUI/releases/download/" .. _version .. "/main.lua")
-
-        if writefile then
-            writefile(uiFileName, codigoUi)
-            writefile(timeFileName, tostring(os.time()))
-        end
-
-        return loadstring(codigoUi)()
-    end
-end)
-
-if not ok or not WindUI then
-    return
-end
+local OpenHubUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Styx-ui/Openhub/refs/heads/main/OpenHub.lua"))()
 
 local conns = {}
 local function C(sig, fn)
@@ -3151,100 +3121,106 @@ local function fpsSet(v)
 end
 
 
-local Window = WindUI:CreateWindow({
-    Title = "Open HUB",
-    Theme = "Midnight",
-    Author = "Latam duels",
-    Folder = "NEXVYRHUB | LATAM [1.0]",
-    Acrylic = false,
-    Transparent = false,
-    NewElements = true,
-    HideSearchBar = false,
-    OpenButton = {
-        Title = "Open HUB",
-        CornerRadius = UDim.new(1),
-        StrokeThickness = 1,
-        Enabled = true,
-        Draggable = true,
-        Scale = 0.8,
-        Color = ColorSequence.new(Color3.fromRGB(255, 70, 140), Color3.fromRGB(150, 80, 255))
-    },
-    Topbar = {
-        Height = 44,
-        ButtonsType = "Default"
-    }
+local Window = OpenHubUI:CreateWindow({
+    Title = "Latam Duels",
+    Subtitle = "Open Hub",
+    Icon = "rbxthumb://type=Asset&id=118232139384203&w=420&h=420",
+    OpenButtonIcon = "menu",
+    Theme = "Obsidian",
+    Width = 600,
+    Height = 320,
+    Acrylic = 0.42,
+    Glass = 0.48,
+    Resizable = false,
+    Intro = true
 })
 
-WindUI:SetTheme("Midnight")
+Window:SetBackground("https://raw.githubusercontent.com/Styx-ui/Openhub/refs/heads/main/Openhub.jpg", {
+    Transparency = 0,
+    ScaleType = "Crop"
+})
 
-local TabFarm = Window:Tab({ Title = "Farm", Icon = "coins" })
-local TabAuto = Window:Tab({ Title = "Auto", Icon = "bot" })
-local TabKill = Window:Tab({ Title = "Kill", Icon = "swords" })
-local TabAim = Window:Tab({ Title = "Aim", Icon = "crosshair" })
-local TabEsp = Window:Tab({ Title = "ESP", Icon = "eye" })
-local TabMisc = Window:Tab({ Title = "Misc", Icon = "settings" })
-local TabFps = Window:Tab({ Title = "FPS", Icon = "gauge" })
-local TabSounds = Window:Tab({ Title = "Sounds", Icon = "volume-2" })
-local TabCredits = Window:Tab({ Title = "Credits", Icon = "users" })
+local function uiNotify(title, text)
+    Window:Notify({
+        Title = tostring(title),
+        Content = tostring(text),
+        Duration = 3,
+        Icon = "bell"
+    })
+end
 
-TabFarm:Section({ Title = "Farm" })
-TabFarm:Toggle({
-    Title = "Coin Farm",
-    Desc = "Auto collect nearby coins and drops",
-    Value = false,
+local function addGroup(name, icon)
+    return Window:CreateTabGroup({Name = name, Icon = icon})
+end
+
+addGroup("Farm", "coins")
+local TabFarm = Window:CreateTab({Name = "Farm", Icon = "coins"})
+TabFarm:CreateSection("Recogida automática")
+TabFarm:CreateToggle({
+    Name = "Coin Farm",
+    Description = "Recoge monedas y drops cercanos automáticamente.",
+    CurrentValue = false,
     Callback = function(v)
         FARM.on = v
         if v then
             table.clear(lastTouch)
             rescan()
         end
-    end,
+    end
 })
-TabFarm:Toggle({
-    Title = "Safe Farm",
-    Desc = "Slower safer collection (recommended)",
-    Value = true,
+TabFarm:CreateToggle({
+    Name = "Safe Farm",
+    Description = "Usa una recogida más lenta y segura.",
+    CurrentValue = true,
     Callback = function(v)
         FARM.safe = v
         applyFarmMode()
         table.clear(lastTouch)
-    end,
+    end
+})
+TabFarm:CreateSlider({
+    Name = "Range",
+    Min = 10,
+    Max = 80,
+    CurrentValue = FARM.range,
+    Callback = function(v) FARM.range = v end
 })
 
-TabAuto:Section({ Title = "Queue" })
-TabAuto:Dropdown({
-    Title = "Mode",
-    Values = { "1vs1", "2vs2", "3vs3", "4vs4", "5vs5" },
-    Value = "1vs1",
+addGroup("Queue", "list-checks")
+local TabAuto = Window:CreateTab({Name = "Auto", Icon = "bot"})
+TabAuto:CreateSection("Cola de partida")
+TabAuto:CreateDropdown({
+    Name = "Mode",
+    Options = {"1vs1", "2vs2", "3vs3", "4vs4", "5vs5"},
+    CurrentOption = "1vs1",
     Callback = function(v)
         AUTO.duel = v
         autoReset()
-    end,
+    end
 })
-TabAuto:Dropdown({
-    Title = "Side",
-    Values = { "Left", "Right" },
-    Value = "Right",
+TabAuto:CreateDropdown({
+    Name = "Side",
+    Options = {"Left", "Right"},
+    CurrentOption = "Right",
     Callback = function(v)
         AUTO.side = v
         autoReset()
-    end,
+    end
 })
-TabAuto:Toggle({
-    Title = "Flip Slots",
-    Value = false,
+TabAuto:CreateToggle({
+    Name = "Flip Slots",
+    CurrentValue = false,
     Callback = function(v)
         AUTO.flip = v
         autoReset()
-    end,
+    end
 })
-
-local togPos1, togPos2
+local togPos1
+local togPos2
 local suppress = false
-
-togPos1 = TabAuto:Toggle({
-    Title = "Slot 1",
-    Value = false,
+togPos1 = TabAuto:CreateToggle({
+    Name = "Slot 1",
+    CurrentValue = false,
     Callback = function(v)
         if suppress then return end
         if v then
@@ -3260,12 +3236,11 @@ togPos1 = TabAuto:Toggle({
             AUTO.pos = nil
             autoReset()
         end
-    end,
+    end
 })
-
-togPos2 = TabAuto:Toggle({
-    Title = "Slot 2",
-    Value = false,
+togPos2 = TabAuto:CreateToggle({
+    Name = "Slot 2",
+    CurrentValue = false,
     Callback = function(v)
         if suppress then return end
         if v then
@@ -3281,269 +3256,177 @@ togPos2 = TabAuto:Toggle({
             AUTO.pos = nil
             autoReset()
         end
-    end,
+    end
 })
 
-TabKill:Section({ Title = "Kill All" })
-TabKill:Button({
-    Title = "Start Kill All",
-    Callback = function()
-        doKillAll()
-    end,
+addGroup("Combat", "swords")
+local TabKill = Window:CreateTab({Name = "Kill", Icon = "swords"})
+TabKill:CreateSection("Kill All")
+TabKill:CreateButton({Name = "Start Kill All", Callback = function() doKillAll() end})
+TabKill:CreateButton({Name = "Stop Kill All", Callback = function() KILLALL.running = false end})
+TabKill:CreateSlider({
+    Name = "Tween Duration",
+    Min = 0.8,
+    Max = 4,
+    CurrentValue = 1.8,
+    Callback = function(v) KILLALL.tweenTime = v end
 })
-TabKill:Button({
-    Title = "Stop Kill All",
-    Callback = function()
-        KILLALL.running = false
-    end,
+TabKill:CreateSlider({
+    Name = "Clicks Per Enemy",
+    Min = 4,
+    Max = 30,
+    CurrentValue = 12,
+    Callback = function(v) KILLALL.clicks = v end
 })
-TabKill:Slider({
-    Title = "Tween Duration (sec)",
-    Step = 0.1,
-    Value = { Min = 0.8, Max = 4, Default = 1.8 },
-    Callback = function(v) KILLALL.tweenTime = v end,
-})
-TabKill:Slider({
-    Title = "Clicks Per Enemy",
-    Step = 1,
-    Value = { Min = 4, Max = 30, Default = 12 },
-    Callback = function(v) KILLALL.clicks = v end,
-})
-TabKill:Slider({
-    Title = "Delay Between Clicks",
-    Step = 0.01,
-    Value = { Min = 0.04, Max = 0.25, Default = 0.09 },
-    Callback = function(v) KILLALL.clickDelay = v end,
+TabKill:CreateSlider({
+    Name = "Delay Between Clicks",
+    Min = 0.04,
+    Max = 0.25,
+    CurrentValue = 0.09,
+    Callback = function(v) KILLALL.clickDelay = v end
 })
 
-TabAim:Section({ Title = "Silent Aim" })
-TabAim:Toggle({
-    Title = "Silent Aim",
-    Desc = "Redirect shots to the target",
-    Value = false,
+addGroup("Aim", "crosshair")
+local TabAim = Window:CreateTab({Name = "Aim", Icon = "crosshair"})
+TabAim:CreateSection("Silent Aim")
+TabAim:CreateToggle({
+    Name = "Silent Aim",
+    Description = "Redirige los disparos al objetivo seleccionado.",
+    CurrentValue = false,
     Callback = function(v)
         SILENT.on = v
-        if v then
-            local s, e = pcall(installHooks)
-        else
-            SILENT.target = nil
-        end
-    end,
+        if v then pcall(installHooks) else SILENT.target = nil end
+    end
 })
-TabAim:Toggle({
-    Title = "Autoshoot",
-    Desc = "Auto fire when a target is locked",
-    Value = false,
+TabAim:CreateToggle({
+    Name = "Autoshoot",
+    Description = "Dispara automáticamente cuando hay un objetivo.",
+    CurrentValue = false,
     Callback = function(v)
         SILENT.autoshoot = v
-        if v then
-            local s, e = pcall(installHooks)
-        elseif not SILENT.on then
-            SILENT.target = nil
-        end
-    end,
+        if v then pcall(installHooks) elseif not SILENT.on then SILENT.target = nil end
+    end
 })
-TabAim:Dropdown({
-    Title = "Hit Part",
-    Values = { "Head", "Torso", "Full Body" },
-    Value = "Head",
-    Callback = function(v) SILENT.part = v end,
+TabAim:CreateDropdown({
+    Name = "Hit Part",
+    Options = {"Head", "Torso", "Full Body"},
+    CurrentOption = "Head",
+    Callback = function(v) SILENT.part = v end
 })
 
-TabEsp:Section({ Title = "Visuals" })
-TabEsp:Toggle({
-    Title = "Highlight",
-    Value = false,
-    Callback = function(v) ESP.hl = v end,
-})
-TabEsp:Toggle({
-    Title = "Boxes",
-    Value = false,
-    Callback = function(v) ESP.box = v end,
-})
-TabEsp:Toggle({
-    Title = "Pulse",
-    Value = true,
-    Callback = function(v) ESP.pulse = v end,
-})
-TabEsp:Colorpicker({
-    Title = "Color",
-    Default = ESP.color,
-    Callback = function(c) ESP.color = c end,
-})
-TabEsp:Section({ Title = "Combat UI" })
-TabEsp:Toggle({
-    Title = "Hitmarker",
-    Value = true,
-    Callback = function(v) HM.on = v end,
-})
-TabEsp:Toggle({
-    Title = "Kill Feed",
-    Value = true,
+addGroup("Visuals", "eye")
+local TabEsp = Window:CreateTab({Name = "ESP", Icon = "eye"})
+TabEsp:CreateSection("Player visuals")
+TabEsp:CreateToggle({Name = "Highlight", CurrentValue = false, Callback = function(v) ESP.hl = v end})
+TabEsp:CreateToggle({Name = "Boxes", CurrentValue = false, Callback = function(v) ESP.box = v end})
+TabEsp:CreateToggle({Name = "Pulse", CurrentValue = true, Callback = function(v) ESP.pulse = v end})
+TabEsp:CreateColorPicker({Name = "ESP Color", Color = ESP.color, Callback = function(c) ESP.color = c end})
+TabEsp:CreateSection("Combat UI")
+TabEsp:CreateToggle({Name = "Hitmarker", CurrentValue = true, Callback = function(v) HM.on = v end})
+TabEsp:CreateToggle({
+    Name = "Kill Feed",
+    CurrentValue = true,
     Callback = function(v)
         KN.on = v
         if KN.gui then KN.gui.Enabled = v end
-    end,
+    end
 })
 
-TabMisc:Section({ Title = "Movement" })
-TabMisc:Toggle({
-    Title = "Speed",
-    Value = false,
-    Callback = function(state)
-        SetSpeed(state)
-        notify("Speed", state)
-    end,
-})
-TabMisc:Slider({
-    Title = "Speed Value",
-    Step = 1,
-    Value = { Min = 1, Max = 100, Default = 29 },
-    Callback = function(v) SPEED = v end,
-})
-TabMisc:Toggle({
-    Title = "Infinite Jump",
-    Value = false,
-    Callback = function(state)
-        SetInfJump(state)
-        notify("Jump", state)
-    end,
-})
-TabMisc:Slider({
-    Title = "Jump Power",
-    Step = 1,
-    Value = { Min = 1, Max = 100, Default = 45 },
-    Callback = function(v) JUMP_POWER = v end,
-})
-
-TabFps:Section({ Title = "Performance" })
-TabFps:Toggle({
-    Title = "FPS Boost",
-    Desc = "Reduces particles, effects, shadows and graphics (client only)",
-    Value = false,
+addGroup("Movement", "person-standing")
+local TabMisc = Window:CreateTab({Name = "Misc", Icon = "settings-2"})
+TabMisc:CreateSection("Movimiento")
+TabMisc:CreateToggle({
+    Name = "Speed",
+    CurrentValue = false,
     Callback = function(v)
-        fpsSet(v)
-    end,
+        SetSpeed(v)
+        uiNotify("Speed", v and "Activado" or "Desactivado")
+    end
+})
+TabMisc:CreateSlider({Name = "Speed Value", Min = 1, Max = 100, CurrentValue = 29, Callback = function(v) SPEED = v end})
+TabMisc:CreateToggle({
+    Name = "Infinite Jump",
+    CurrentValue = false,
+    Callback = function(v)
+        SetInfJump(v)
+        uiNotify("Infinite Jump", v and "Activado" or "Desactivado")
+    end
+})
+TabMisc:CreateSlider({Name = "Jump Power", Min = 1, Max = 100, CurrentValue = 45, Callback = function(v) JUMP_POWER = v end})
+
+addGroup("Performance", "gauge")
+local TabFps = Window:CreateTab({Name = "FPS", Icon = "gauge"})
+TabFps:CreateSection("Rendimiento")
+TabFps:CreateToggle({
+    Name = "FPS Boost",
+    Description = "Reduce partículas, efectos, sombras y gráficos del cliente.",
+    CurrentValue = false,
+    Callback = function(v) fpsSet(v) end
 })
 
-TabSounds:Section({ Title = "Kill Effects" })
-TabSounds:Dropdown({
-    Title = "Effect",
-    Values = #names > 0 and names or { "None" },
-    Value = names[1] or "None",
-    Callback = function(v) selectedEffect = v end,
+addGroup("Audio", "volume-2")
+local TabSounds = Window:CreateTab({Name = "Sounds", Icon = "volume-2"})
+TabSounds:CreateSection("Kill Effects")
+TabSounds:CreateDropdown({
+    Name = "Effect",
+    Options = #names > 0 and names or {"None"},
+    CurrentOption = names[1] or "None",
+    Callback = function(v) selectedEffect = v end
 })
-TabSounds:Toggle({
-    Title = "Effect Sound",
-    Value = true,
-    Callback = function(v) KILLFX.sound = v end,
-})
-
-TabSounds:Section({ Title = "Kill Sounds" })
-TabSounds:Toggle({
-    Title = "Kill Sound",
-    Value = false,
-    Callback = function(v) AUDIO.KILLSOUNDS.on = v end,
-})
-TabSounds:Toggle({
-    Title = "List Sounds",
-    Value = true,
-    Callback = function(v) AUDIO.KILLSOUNDS.listOn = v end,
-})
+TabSounds:CreateToggle({Name = "Effect Sound", CurrentValue = true, Callback = function(v) KILLFX.sound = v end})
+TabSounds:CreateSection("Kill Sounds")
+TabSounds:CreateToggle({Name = "Kill Sound", CurrentValue = false, Callback = function(v) AUDIO.KILLSOUNDS.on = v end})
+TabSounds:CreateToggle({Name = "List Sounds", CurrentValue = true, Callback = function(v) AUDIO.KILLSOUNDS.listOn = v end})
 AUDIO.KILLSOUNDS.names = {}
-for _, s in ipairs(AUDIO.KILLSOUNDS.list) do
-    AUDIO.KILLSOUNDS.names[#AUDIO.KILLSOUNDS.names + 1] = s.name
+for _, sound in ipairs(AUDIO.KILLSOUNDS.list) do
+    AUDIO.KILLSOUNDS.names[#AUDIO.KILLSOUNDS.names + 1] = sound.name
 end
-TabSounds:Dropdown({
-    Title = "Sound",
-    Values = AUDIO.KILLSOUNDS.names,
-    Value = AUDIO.KILLSOUNDS.selected,
-    Callback = function(v) AUDIO.KILLSOUNDS.selected = v end,
+TabSounds:CreateDropdown({
+    Name = "Sound",
+    Options = AUDIO.KILLSOUNDS.names,
+    CurrentOption = AUDIO.KILLSOUNDS.selected,
+    Callback = function(v) AUDIO.KILLSOUNDS.selected = v end
 })
-TabSounds:Input({
-    Title = "Custom Sound ID",
-    Value = "",
+TabSounds:CreateInput({
+    Name = "Custom Sound ID",
     Placeholder = "123456789 o rbxassetid://123456789",
     Callback = function(v)
-        local s = tostring(v or "")
-        local n = s:match("%d+")
-        AUDIO.KILLSOUNDS.customId = n and ("rbxassetid://" .. n) or s
-    end,
+        local value = tostring(v or "")
+        local number = value:match("%d+")
+        AUDIO.KILLSOUNDS.customId = number and ("rbxassetid://" .. number) or value
+    end
 })
-TabSounds:Slider({
-    Title = "Kill Sound Volume",
-    Step = 0.1,
-    Value = { Min = 0.1, Max = 5, Default = 1.5 },
-    Callback = function(v) AUDIO.KILLSOUNDS.volume = v end,
-})
-TabSounds:Button({
-    Title = "Preview Kill Sound",
-    Callback = function()
-        pcall(function()
-            AUDIO.KILLSOUNDS.play(true)
-        end)
-    end,
-})
-
-
-TabSounds:Section({ Title = "Skys" })
-TabSounds:Dropdown({
-    Title = "Sky Preset",
-    Values = AUDIO.SKY.order,
-    Value = "Original",
-    Callback = function(v)
-        pcall(AUDIO.SKY.apply, v)
-    end,
-})
-TabSounds:Input({
-    Title = "Custom Sky IDs",
-    Value = "",
+TabSounds:CreateSlider({Name = "Kill Sound Volume", Min = 0.1, Max = 5, CurrentValue = 1.5, Callback = function(v) AUDIO.KILLSOUNDS.volume = v end})
+TabSounds:CreateButton({Name = "Preview Kill Sound", Callback = function() pcall(function() AUDIO.KILLSOUNDS.play(true) end) end})
+TabSounds:CreateSection("Skys")
+TabSounds:CreateDropdown({Name = "Sky Preset", Options = AUDIO.SKY.order, CurrentOption = "Original", Callback = function(v) pcall(AUDIO.SKY.apply, v) end})
+TabSounds:CreateInput({
+    Name = "Custom Sky IDs",
     Placeholder = "id1,id2,id3,id4,id5,id6",
     Callback = function(v)
         local ids = {}
-        for num in tostring(v or ""):gmatch("%d+") do
-            ids[#ids + 1] = tonumber(num)
-        end
+        for number in tostring(v or ""):gmatch("%d+") do ids[#ids + 1] = tonumber(number) end
         if #ids == 1 then
             local n = ids[1]
-            AUDIO.SKY.customIds = { n, n, n, n, n, n }
+            AUDIO.SKY.customIds = {n, n, n, n, n, n}
         elseif #ids >= 6 then
-            AUDIO.SKY.customIds = { ids[1], ids[2], ids[3], ids[4], ids[5], ids[6] }
+            AUDIO.SKY.customIds = {ids[1], ids[2], ids[3], ids[4], ids[5], ids[6]}
         end
-        if AUDIO.SKY.current == "Custom" then
-            pcall(AUDIO.SKY.apply, "Custom")
-        end
-    end,
+        if AUDIO.SKY.current == "Custom" then pcall(AUDIO.SKY.apply, "Custom") end
+    end
 })
-TabSounds:Button({
-    Title = "Apply Custom Sky",
-    Callback = function()
-        pcall(AUDIO.SKY.apply, "Custom")
-    end,
-})
-TabSounds:Button({
-    Title = "Reset Sky",
-    Callback = function()
-        pcall(AUDIO.SKY.restore)
-    end,
-})
+TabSounds:CreateButton({Name = "Apply Custom Sky", Callback = function() pcall(AUDIO.SKY.apply, "Custom") end})
+TabSounds:CreateButton({Name = "Reset Sky", Callback = function() pcall(AUDIO.SKY.restore) end})
 
-TabCredits:Section({ Title = "About" })
-TabCredits:Paragraph({
-    Title = "Latam Duels",
-    Desc = "Hub for LATAM Duels",
-})
-TabCredits:Paragraph({
-    Title = "Developers",
-    Desc = "7.dui  ·  jos1k  ·  void  ·  fabnx1",
-})
-TabCredits:Section({ Title = "Community" })
-TabCredits:Paragraph({
-    Title = "Discord",
-    Desc = "https://discord.gg/BYTqQH2ZQ",
-})
-TabCredits:Button({
-    Title = "Copy Discord",
+addGroup("About", "users")
+local TabCredits = Window:CreateTab({Name = "Credits", Icon = "users"})
+TabCredits:CreateSection("Latam Duels")
+TabCredits:CreateParagraph({Name = "About", Title = "Latam Duels", Content = "Hub de utilidades para Latam Duels."})
+TabCredits:CreateParagraph({Name = "Developers", Title = "Developers", Content = "7.dui · jos1k · void · fabnx1"})
+TabCredits:CreateSection("Community")
+TabCredits:CreateParagraph({Name = "Discord", Title = "Discord", Content = "discord.gg/BYTqQH2ZQ"})
+TabCredits:CreateButton({
+    Name = "Copy Discord",
     Callback = function()
         pcall(function()
             if setclipboard then
@@ -3552,37 +3435,17 @@ TabCredits:Button({
                 toclipboard("https://discord.gg/BYTqQH2ZQ")
             end
         end)
-    end,
+        uiNotify("Discord", "Enlace copiado.")
+    end
 })
 
-genv.__UWU_STOP = function()
-    pcall(fpsStop)
-    pcall(AUDIO.SKY.restore)
-    FARM.on = false
-    ESP.hl = false
-    ESP.box = false
-    SILENT.on = false
-    SILENT.target = nil
-    KILLFX.on = false
-    KILLFX.debug = false
-    AUDIO.KILLSOUNDS.on = false
-    AUTO.pos = nil
-    KILLALL.running = false
-    SILENT.autoshoot = false
-    pcall(SetSpeed, false)
-    pcall(SetInfJump, false)
-    for _, c in ipairs(conns) do pcall(function() c:Disconnect() end) end
-    HM.on = false
-    KN.on = false
-    pcall(function() if HM.gui then HM.gui:Destroy() end end)
-    pcall(function() if KN.gui then KN.gui:Destroy() end end)
-    pcall(function() holder:Destroy() end)
-    pcall(function() boxGui:Destroy() end)
-    for _, c in ipairs(workspace:GetChildren()) do
-        if c.Name == "UwUPreview" then pcall(function() c:Destroy() end) end
-    end
-    pcall(function() Window:Destroy() end)
-    genv.__UWU_STOP = nil
-end
+Window:SetTheme("Obsidian")
+uiNotify("Latam Duels", "La interfaz se cargó correctamente.")
 
-pcall(function() Window:SelectTab(1) end)
+if genv.__UWU_STOP then
+    local previousStop = genv.__UWU_STOP
+    genv.__UWU_STOP = function()
+        pcall(previousStop)
+        pcall(function() Window:Destroy() end)
+    end
+end
