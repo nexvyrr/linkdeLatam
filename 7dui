@@ -3421,7 +3421,7 @@ TabSounds:CreateButton({Name = "Reset Sky", Callback = function() pcall(AUDIO.SK
 addGroup("About", "users")
 local TabCredits = Window:CreateTab({Name = "Credits", Icon = "users"})
 TabCredits:CreateSection("Latam Duels")
-TabCredits:CreateParagraph({Name = "About", Title = "Latam Duels", Content = "Hub de utilidades para Latam Duels."})
+TabCredits:CreateParagraph({Name = "About", Title = "Latam Duels", Content = ""})
 TabCredits:CreateParagraph({Name = "Developers", Title = "Developers", Content = "7.dui · jos1k · void · fabnx1"})
 TabCredits:CreateSection("Community")
 TabCredits:CreateParagraph({Name = "Discord", Title = "Discord", Content = "discord.gg/BYTqQH2ZQ"})
@@ -3440,7 +3440,6 @@ TabCredits:CreateButton({
 })
 
 Window:SetTheme("Obsidian")
-uiNotify("Latam Duels", "La interfaz se cargó correctamente.")
 
 if genv.__UWU_STOP then
     local previousStop = genv.__UWU_STOP
